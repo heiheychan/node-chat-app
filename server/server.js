@@ -2,6 +2,7 @@ const path = require('path');
 const http = require('http');
 const express = require('express');
 const socketIO = require('socket.io');
+const _ = require('lodash');
 
 const {generateMessage, generateLocationMessage} = require('./util/message');
 const {isRealString} = require('./util/validation');
@@ -17,8 +18,7 @@ var users = new Users();
 app.use(express.static(publicPath));
 
 io.on('connection', (socket) => {
-  console.log('New user connected');
-
+  io.emit('roomList', _.uniq(users.getRoomList()));
 
   socket.on('join', (params, callback) => {
     if (!isRealString(params.name) || !isRealString(params.room)) {
@@ -29,12 +29,19 @@ io.on('connection', (socket) => {
     users.removeUser(socket.id);
     users.addUser(socket.id, params.name, params.room);
 
+    io.emit('roomList', _.uniq(users.getRoomList()));
     io.to(params.room).emit('updateUserList', users.getUserList(params.room));
+    io.to(params.room).emit('updateHighlight');
     socket.emit('newMessage', generateMessage('Admin','Greeting!'));
     // need check
     socket.to(params.room).broadcast.emit('newMessage', generateMessage('Admin',`${params.name} has joined the conversation`));
     
     callback();
+  })
+
+  socket.on('getUsername', (p, callback) => {
+    var user = users.getUser(socket.id);
+    callback(user.name);
   })
 
   socket.on('createMessage', (message, callback) => {
